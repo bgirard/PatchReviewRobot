@@ -32,6 +32,7 @@
 
 import os
 import os.path
+import re
 import sys
 
 import modules.cpplint as cpplint
@@ -87,13 +88,31 @@ Syntax: %(program_name)s [--verbose=#] [--git-commit=<COMMITISH>] [--output=vs7]
          --filter=
 """ % {'program_name': sys.argv[0]}
 
-def process_patch(patch_string):
+def match(pattern, string):
+    return re.compile(pattern).match(string)
+
+def process_patch(patch_string, root):
     """Does lint on a single patch.
 
     Args:
       patch_string: A string of a patch.
     """
     patch = DiffParser(patch_string.splitlines())
+
+    if len(patch.files) == 0:
+        cpplint.error("patch", 0, "path/notempty", 3, "Patch does not appear to diff against any file.")
+        return
+
+    if not patch.status_line:
+        cpplint.error("patch", 0, "path/nosummary", 3, "Patch does not have a summary.")
+    else:
+        proper_format = match(r"^Bug [0-9]+ - ", patch.status_line)
+        if not proper_format:
+            cpplint.error("patch", 0, "path/bugnumber", 3, "Patch summary should begin with 'Bug XXXXX - '.")
+        
+
+    if not patch.patch_description:
+        cpplint.error("patch", 0, "path/nodescription", 3, "Patch does not have a description.")
 
     for filename, diff in patch.files.iteritems():
         file_extension = os.path.splitext(filename)[1]
@@ -117,14 +136,14 @@ def process_patch(patch_string):
                 if line_number in line_numbers:
                     cpplint.error(filename, line_number, category, confidence, message)
 
-            cpplint.process_file(os.path.join(scm.find_checkout_root(cwd), filename), error=error_for_patch)
+            cpplint.process_file(os.path.join(root, filename), filename, error=error_for_patch)
 
 
 def main():
-    global cwd 
+    global cwd
     global scm
-    cpplint.use_mozilla_styles()
 
+    cpplint.use_mozilla_styles()
     (args, flags) = cpplint.parse_arguments(sys.argv[1:], ["git-commit="])
     if args:
         sys.stderr.write("ERROR: We don't support files as arguments for now.\n" + cpplint._USAGE)
@@ -134,9 +153,9 @@ def main():
     scm = detect_scm_system(cwd)
 
     if "--git-commit" in flags:
-        process_patch(scm.create_patch_from_local_commit(flags["--git-commit"]))
+        process_patch(scm.create_patch_from_local_commit(flags["--git-commit"]), scm.find_checkout_root(cwd))
     else:
-        process_patch(scm.create_patch())
+        process_patch(scm.create_patch(), scm.find_checkout_root(cwd))
 
     sys.stderr.write('Total errors found: %d\n' % cpplint.error_count())
     sys.exit(cpplint.error_count() > 0)

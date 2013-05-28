@@ -40,13 +40,13 @@ from modules.logging import error, log
 def detect_scm_system(path):
     if HG.in_working_directory(path):
         return HG(cwd=path)
-    
+
     if SVN.in_working_directory(path):
         return SVN(cwd=path)
-    
+
     if Git.in_working_directory(path):
         return Git(cwd=path)
-    
+
     raise ScriptError("working directory is not a HG/SVN/Git repo")
     return None
 
@@ -395,11 +395,11 @@ class Git(SCM):
         return self.run_command(['git', 'diff-tree', '--shortstat', '--no-commit-id', commit_id])
 
 
-# All git-specific logic should go here.
+# All hg-specific logic should go here.
 class HG(SCM):
     def __init__(self, cwd, dryrun=False):
         SCM.__init__(self, cwd, dryrun)
-    
+
     @classmethod
     def in_working_directory(cls, path):
         return cls.run_command(['hg', 'status'], cwd=path, return_exit_code=True) == 0
@@ -408,7 +408,7 @@ class HG(SCM):
     def find_checkout_root(cls, path):
         checkout_root = cls.run_command(['hg', 'root'], cwd=path)
         return checkout_root
-    
+
     def status_command(self):
         return ['hg', 'status']
 

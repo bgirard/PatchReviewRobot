@@ -645,10 +645,10 @@ def error(filename, line_number, category, confidence, message):
     if _should_print_error(category, confidence):
         _cpplint_state.increment_error_count()
         if _cpplint_state.output_format == 'vs7':
-            sys.stderr.write('%s(%s):  %s  [%s] [%d]\n' % (
+            write_error('%s(%s):  %s  [%s] [%d]\n' % (
                 filename, line_number, message, category, confidence))
         else:
-            sys.stderr.write('%s:%s:  %s  [%s] [%d]\n' % (
+            write_error('%s:%s:  %s  [%s] [%d]\n' % (
                 filename, line_number, message, category, confidence))
 
 
@@ -847,9 +847,8 @@ def check_for_copyright(filename, lines, error):
         if re.search(r'Copyright|License', lines[line], re.I):
             break
     else:                       # means no copyright line was found
-        error(filename, 0, 'legal/copyright', 5,
-              'No copyright message found.  '
-              'You should have a line: "Copyright [year] <Copyright Owner>"')
+        error(filename, 1, 'legal/copyright', 3,
+              'No copyright message found.')
 
 
 def get_header_guard_cpp_variable(filename):
@@ -903,7 +902,7 @@ def check_for_header_guard(filename, lines, error):
             endif_line_number = line_number
 
     if not ifndef or not define or ifndef != define:
-        error(filename, 0, 'build/header_guard', 5,
+        error(filename, 1, 'build/header_guard', 5,
               'No #ifndef header guard found, suggested CPP variable is: %s' %
               cppvar)
         return
@@ -2128,7 +2127,7 @@ def check_style(filename, clean_lines, line_number, file_extension, error):
           and not match(r'\s*\w+\s*:\s*$', cleansed_line)):
         error(filename, line_number, 'whitespace/indent', 3,
               'Weird number of spaces at line-start.  '
-              'Are you using atleast 2-space indent?')
+              'Are you using at least 2-space indent?')
     # Labels should always be indented at least one space.
     elif not initial_spaces and line[:2] != '//':
         label_match = match(r'(?P<label>[^:]+):\s*$', line)
@@ -2453,7 +2452,7 @@ def check_language(filename, clean_lines, line_number, file_extension, include_s
     if search(r'\bdynamic_cast<', line) and not _is_test_filename(filename):
         error(filename, line_number, 'runtime/rtti', 5,
               'Do not use dynamic_cast<>.  If you need to cast within a class '
-              "hierarchy, use static_cast<> to upcast.  Google doesn't support "
+              "hierarchy, use static_cast<> to upcast.  Mozilla doesn't support "
               'RTTI.')
 
     if search(r'\b([A-Za-z0-9_]*_)\(\1\)', line):
@@ -2940,13 +2939,17 @@ def process_file_data(filename, file_extension, lines, error):
     check_for_new_line_at_eof(filename, lines, error)
 
 
-def process_file(filename, error=error):
+def process_file(filename, relative_name=None, error=error):
     """Performs cpplint on a single file.
 
     Args:
       filename: The name of the file to parse.
       error: The function to call with any errors found.
     """
+
+    if not relative_name:
+        relative_name = filename
+
     try:
         # Support the UNIX convention of using "-" for stdin.  Note that
         # we are not opening the file with universal newline support
@@ -2974,8 +2977,8 @@ def process_file(filename, error=error):
                 carriage_return_found = True
 
     except IOError:
-        sys.stderr.write(
-            "Skipping input '%s': Can't open for reading\n" % filename)
+        write_error(
+            "Skipping input '%s': Can't open for reading\n" % relative_name)
         return
 
     # Note, if no dot is found, this will give the entire filename as the ext.
@@ -2985,17 +2988,17 @@ def process_file(filename, error=error):
     # should rely on the extension.
     if (filename != '-' and file_extension != 'h' and file_extension != 'cpp'
         and file_extension != 'c'):
-        sys.stderr.write('Ignoring %s; not a .cpp, .c or .h file\n' % filename)
+        write_error('Ignoring %s; not a .cpp, .c or .h file\n' % filename)
     else:
-        process_file_data(filename, file_extension, lines, error)
+        process_file_data(relative_name, file_extension, lines, error)
         if carriage_return_found and os.linesep != '\r\n':
             # Use 0 for line_number since outputing only one error for potentially
             # several lines.
-            error(filename, 0, 'whitespace/newline', 1,
+            error(relative_name, 1, 'whitespace/newline', 1,
                   'One or more unexpected \\r (^M) found;'
                   'better to use only a \\n')
 
-    sys.stderr.write('Done processing %s\n' % filename)
+    write_error('Done processing %s\n' % relative_name)
 
 
 def print_usage(message):
@@ -3004,7 +3007,7 @@ def print_usage(message):
     Args:
       message: The optional error message.
     """
-    sys.stderr.write(_USAGE)
+    write_error(_USAGE)
     if message:
         sys.exit('\nFATAL ERROR: ' + message)
     else:
@@ -3016,7 +3019,7 @@ def print_categories():
 
     These are the categories used to filter messages via --filter.
     """
-    sys.stderr.write(_ERROR_CATEGORIES)
+    write_error(_ERROR_CATEGORIES)
     sys.exit(0)
 
 
@@ -3068,6 +3071,25 @@ def parse_arguments(args, additional_flags=[]):
 
     return (filenames, additional_flag_values)
 
+# When called results will be stored in an internal string for testing
+# rather than output to stderr.
+def prepare_results_to_string():
+    global cpplint_testing
+    global cpplint_results
+    cpplint_testing = True
+    cpplint_results = ""
+
+def get_results():
+    global cpplint_results
+    return cpplint_results
+
+def write_error(error):
+    global cpplint_testing
+    global cpplint_results
+    if cpplint_testing == True:
+      cpplint_results = cpplint_results + error
+    else:    
+      sys.stderr.write(error)
 
 def use_mozilla_styles():
     """Disables some features which are not suitable for WebKit."""
@@ -3078,8 +3100,10 @@ def use_mozilla_styles():
     _DEFAULT_FILTERS = [
         '-whitespace/comments-doublespace',
         '-whitespace/blank_line',
+        '-build/include',  # Webkit specific
         '-build/include_what_you_use',  # <string> for std::string
         '-readability/braces',  # int foo() {};
+        '-readability/null',
         '-readability/fn_size',
         '-build/storage_class',  # const static
         '-build/endif_comment',
@@ -3091,7 +3115,7 @@ def use_mozilla_styles():
 
 
 def main():
-    sys.stderr.write(
+    write_error(
         '''********************* WARNING WARNING WARNING *********************
 
 This tool is in the process of development and may give inaccurate
@@ -3118,7 +3142,7 @@ that you notice that it flags incorrectly.
     _cpplint_state.reset_error_count()
     for filename in filenames:
         process_file(filename)
-    sys.stderr.write('Total errors found: %d\n' % _cpplint_state.error_count)
+    write_error('Total errors found: %d\n' % _cpplint_state.error_count)
     sys.exit(_cpplint_state.error_count > 0)
 
 
