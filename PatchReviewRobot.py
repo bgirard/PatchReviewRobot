@@ -7,11 +7,30 @@
 
 import base64
 import json
+import subprocess
 import os
 import urllib2
 
 JSON_HEADERS = {"Accept": "application/json",
                 "Content-Type": "application/json"}
+
+class ScriptError(Exception):
+    pass
+
+def run_command(args, cwd=None, input=None, raise_on_failure=True, return_exit_code=False, return_stderr=False):
+    stdin = subprocess.PIPE if input else None
+    process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=stdin, cwd=cwd)
+    if return_stderr:
+      output = process.communicate(input)[1].rstrip()
+    else:
+      output = process.communicate(input)[0].rstrip()
+    exit_code = process.wait()
+    if raise_on_failure and exit_code:
+        raise ScriptError('Failed to run "%s"  exit_code: %d  cwd: %s' % (args, exit_code, cwd))
+    if return_exit_code:
+        return exit_code
+    print "Command out: " + output
+    return output
 
 def CreateDefaultOptions():
   options = {
@@ -31,6 +50,21 @@ def LoadOptions():
   options = json.loads(json_data)
 
   return options
+
+def CheckPatch():
+  cwd = os.path.abspath('tree')
+  result = run_command(["hg", "qimport", "/tmp/reviewbot.patch"], cwd)
+  try:
+    result = run_command(["hg", "qpush"], cwd)
+  except ScriptError:
+    result = run_command(["hg", "qpop"], cwd)
+    result = run_command(["hg", "qdel", "reviewbot.patch"], cwd)
+    return "Patch failed to apply on tip (Might be part of patch queue or against another branch/repo)"
+    
+  output = run_command(["../check-style/check-moz-style"], cwd, return_stderr=True, raise_on_failure=False)
+  result = run_command(["hg", "qpop"], cwd)
+  result = run_command(["hg", "qdel", "reviewbot.patch"], cwd)
+  return output
 
 def urlopen(req):
   try:
@@ -62,7 +96,7 @@ def PostComment(bugid, comment):
   print commentStr
   request = urllib2.Request(url, commentStr, JSON_HEADERS)
 
-  #urlopen(request)
+  urlopen(request)
 
 def FetchAttachment(id):
   print "Download attachment: " + str(id)
@@ -77,7 +111,10 @@ def FetchAttachment(id):
   attachmentData = base64.b64decode(response['data'])
   with open("/tmp/reviewbot.patch", "w") as text_file:
     text_file.write(attachmentData)
-  PostComment(response['bug_id'], "Review result for: attachment " + str(id) + "\n" + response['description'] + "\n\nPENDING")
+
+  review_result = CheckPatch()
+  print "Review result: " + review_result
+  PostComment(response['bug_id'], "Automated patch review result for: attachment " + str(id) + "\n" + response['description'] + "\n\n" + review_result)
   return True
 
 def ProcessAttachment(id):
@@ -107,7 +144,7 @@ def ScanAttachment():
   global options
 
   failuresInARow = 0
-  while failuresInARow < 5:
+  while failuresInARow < 20:
     foundAttachment = ProcessAttachment(options["lastattachment"])
     options["lastattachment"] = options["lastattachment"] + 1
     if not foundAttachment:
