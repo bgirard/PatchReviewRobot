@@ -125,7 +125,7 @@ def ProcessAttachment(id):
     body = urllib2.urlopen(url).read()
   except urllib2.HTTPError:
     print "doesn't exist"
-    return False
+    return "None"
 
   response = json.loads(body)
   
@@ -135,7 +135,7 @@ def ProcessAttachment(id):
   if response['is_obsolete']:
     print "Obsolete"
     return True
-  if response['attacher']['name'] != "drivebyreviewer":
+  if response['attacher']['name'] != "bgirard" and response['attacher']['name'] != "ehsan":
     print "Dont review patch by: " + response['attacher']['name']
     return False
 
@@ -152,7 +152,7 @@ def ScanAttachment():
   while failuresInARow < 20:
     foundAttachment = ProcessAttachment(options["lastattachment"])
     options["lastattachment"] = options["lastattachment"] + 1
-    if not foundAttachment:
+    if foundAttachment == "None":
       failuresInARow = failuresInARow + 1
     else:
       SaveOptions(options)
