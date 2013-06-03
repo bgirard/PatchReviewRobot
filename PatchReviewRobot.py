@@ -79,7 +79,7 @@ def urlopen(req):
       pass
 
     if msg:
-      ui.warn('Error: %s\n' % msg)
+      print 'Error: %s\n' % msg)
     raise
 
 def PostComment(bugid, comment):
@@ -138,6 +138,8 @@ def ProcessAttachment(id):
   if response['attacher']['name'] != "drivebyreviewer":
     print "Dont review patch by: " + response['attacher']['name']
     return False
+
+  print "Attachment: " + body
 
   FetchAttachment(id)
   return True
