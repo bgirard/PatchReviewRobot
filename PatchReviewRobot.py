@@ -84,6 +84,8 @@ def urlopen(req):
 
 def PostComment(bugid, comment):
   global options
+
+  comment = "https://wiki.mozilla.org/ReviewRobot\n\n" + comment
   print "Post comment: " + comment
   url = options["bzurl"] + "bug/" + str(bugid) + "/comment?username=" + options["username"] + "&password=" + options["password"]
   print url
