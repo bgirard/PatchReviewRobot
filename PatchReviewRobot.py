@@ -135,6 +135,9 @@ def ProcessAttachment(id):
   if response['is_obsolete']:
     print "Obsolete"
     return True
+  if response['attacher']['name'] != "drivebyreviewer":
+    print "Dont review patch by: " + response['attacher']['name']
+    return False
 
   FetchAttachment(id)
   return True
