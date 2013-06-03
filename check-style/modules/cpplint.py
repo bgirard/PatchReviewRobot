@@ -648,8 +648,8 @@ def error(filename, line_number, category, confidence, message):
             write_error('%s(%s):  %s  [%s] [%d]\n' % (
                 filename, line_number, message, category, confidence))
         else:
-            write_error('%s:%s:  %s  [%s] [%d]\n' % (
-                filename, line_number, message, category, confidence))
+            write_error('@@ %s @@\n%s [%s] [%d]\n' % (
+                line_number, message, category, confidence))
 
 
 # Matches standard C++ escape esequences per 2.13.2.3 of the C++ standard.
@@ -2947,6 +2947,8 @@ def process_file(filename, relative_name=None, error=error):
       error: The function to call with any errors found.
     """
 
+    write_error('::: \'%s\'\n' % relative_name)
+
     if not relative_name:
         relative_name = filename
 
@@ -2998,8 +3000,7 @@ def process_file(filename, relative_name=None, error=error):
                   'One or more unexpected \\r (^M) found;'
                   'better to use only a \\n')
 
-    write_error('Done processing %s\n' % relative_name)
-
+    write_error('\n\n')
 
 def print_usage(message):
     """Prints a brief usage string and exits, optionally with an error message.
@@ -3070,6 +3071,9 @@ def parse_arguments(args, additional_flags=[]):
     _set_filters(filters)
 
     return (filenames, additional_flag_values)
+
+cpplint_testing = False
+cpplint_results = ""
 
 # When called results will be stored in an internal string for testing
 # rather than output to stderr.

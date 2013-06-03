@@ -61,7 +61,7 @@ def CheckPatch():
     result = run_command(["hg", "qdel", "reviewbot.patch"], cwd)
     return "Patch failed to apply on tip (Might be part of patch queue or against another branch/repo)"
     
-  output = run_command(["../check-style/checkmozstyle"], cwd, return_stderr=True, raise_on_failure=False)
+  output = run_command(["../check-style/checkmozstyle.py"], cwd, return_stderr=True, raise_on_failure=False)
   result = run_command(["hg", "qpop"], cwd)
   result = run_command(["hg", "qdel", "reviewbot.patch"], cwd)
   return output
