@@ -79,7 +79,7 @@ def urlopen(req):
       pass
 
     if msg:
-      print 'Error: %s\n' % msg)
+      print ('Error: %s\n' % msg)
     raise
 
 def PostComment(bugid, comment):
